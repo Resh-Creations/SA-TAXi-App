@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Minibus Taxi Finder - Map</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.6.0/remixicon.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <link rel="manifest" href="manifest.json">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: { primary: '#4F46E5', secondary: '#10B981' },
+                    borderRadius: { 'none': '0px', 'sm': '4px', DEFAULT: '8px', 'md': '12px', 'lg': '16px', 'xl': '20px', '2xl': '24px', '3xl': '32px', 'full': '9999px', 'button': '8px' }
+                }
+            }
+        }
+    </script>
+    <style>
+        #map { width: 100%; height: 100%; }
+        .relative.h-[calc(100vh-114px)] { height: calc(100vh - 114px) !important; }
+        .search-popup { display: none; position: absolute; bottom: 10px; right: 10px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 8px; z-index: 1000; }
+        .search-popup input { border: 1px solid #e5e7eb; border-radius: 4px; padding: 6px; width: 200px; }
+    </style>
+</head>
+<body class="bg-gray-50 w-[375px] h-[762px] mx-auto relative">
+    <nav class="fixed top-0 w-full bg-white shadow-sm z-50">
+        <div class="flex items-center justify-between px-4 h-14">
+            <div class="flex items-center gap-2">
+                <img src="https://static.readdy.ai/image/4af54f873fec3d1a2ef13aa3c18bbec0/8b2ad1ca07e49cd9e3d3913c13cb821f.png" alt="Logo" class="w-6 h-6 object-contain" />
+                <div class="bg-white rounded-full shadow-lg p-2 cursor-pointer" id="logoffBtn">
+                    <i class="ri-logout-box-line text-red-500"></i>
+                </div>
+            </div>
+            <div class="w-8 h-8 flex items-center justify-center">
+                <i class="ri-notification-3-line text-gray-600"></i>
+            </div>
+        </div>
+    </nav>
+    <div class="pt-14">
+        <div id="adBanner" class="shadow-sm h-[100px] flex items-center justify-center text-gray-500">Google Ads Placeholder</div>
+        <div class="relative h-[calc(100vh-114px)] rounded-lg overflow-hidden shadow-md">
+            <div id="map" class="w-full h-full"></div>
+            <div class="absolute top-4 right-4 flex flex-col gap-2">
+                <div class="bg-white rounded-full shadow-lg p-2 cursor-pointer" id="recenterBtn">
+                    <i class="ri-focus-3-line text-primary"></i>
+                </div>
+            </div>
+            <div id="searchPopup" class="search-popup">
+                <input type="text" id="searchInput" placeholder="Type in your location (City town area)" />
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let map, currentMarker, peer;
+        const userType = new URLSearchParams(window.location.search).get('type');
+        const saBounds = [[-34.8, 16.5], [-22.1, 32.9]];
+        let nearbyPeers = [];
+        let isOffline = false;
+
+        function initMap(lat, lng, zoom = 15) {
+            if (map) map.remove();
+            map = L.map('map', { zoomControl: false }).setView([lat, lng], zoom);
+
+            if (navigator.onLine && !isOffline) {
+                L.tileLayer('https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}{r}.png', {
+                    attribution: '© <a href="https://stadiamaps.com/">Stadia Maps</a>',
+                    maxZoom: 18
+                }).addTo(map);
+            } else {
+                showOfflineMap(lat, lng, zoom);
+            }
+
+            currentMarker = L.marker([lat, lng]).addTo(map).bindPopup("You are here").openPopup();
+            initPeer(lat, lng);
+            setTimeout(() => map.invalidateSize(), 100);
+        }
+
+        function showOfflineMap(lat, lng, zoom) {
+            if (!map) map = L.map('map', { zoomControl: false }).setView([lat, lng], zoom);
+            map.eachLayer(layer => layer.remove());
+            L.imageOverlay('offline map.jpg', saBounds).addTo(map);
+            currentMarker = L.marker([lat, lng]).addTo(map).bindPopup("You are here (offline)").openPopup();
+        }
+
+        function initPeer(lat, lng) {
+            peer = new Peer({
+                host: 'taxi-finder-signaling.onrender.com', // Replace with your Render URL
+                port: 9000,
+                path: '/peerjs',
+                secure: true
+            });
+
+            peer.on('open', (id) => {
+                console.log('My peer ID is: ' + id);
+                broadcastLocation(lat, lng);
+            });
+
+            peer.on('connection', (conn) => {
+                conn.on('data', (data) => {
+                    const distance = calculateDistance(lat, lng, data.lat, data.lng);
+                    if (distance <= 650 && ((userType === 'taxi' && data.type === 'commuter') || (userType === 'commuter' && data.type === 'taxi'))) {
+                        const marker = L.marker([data.lat, data.lng]).addTo(map).bindPopup(`${data.name} - ${Math.round(distance)}m`);
+                        nearbyPeers.push({ id: conn.peer, lat: data.lat, lng: data.lng, marker });
+                    }
+                });
+            });
+
+            peer.on('error', (err) => console.error('PeerJS error:', err));
+        }
+
+        function broadcastLocation(lat, lng) {
+            if (!peer || isOffline || !navigator.onLine) return;
+
+            const data = { lat, lng, type: userType, name: userType === 'taxi' ? 'Taxi' : 'Commuter' };
+            nearbyPeers.forEach(p => {
+                const conn = peer.connect(p.id);
+                conn.on('open', () => conn.send(data));
+            });
+
+            setTimeout(() => broadcastLocation(lat, lng), 5000);
+        }
+
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3;
+            const φ1 = lat1 * Math.PI / 180;
+            const φ2 = lat2 * Math.PI / 180;
+            const Δφ = (lat2 - lat1) * Math.PI / 180;
+            const Δλ = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        async function handleSearch() {
+            const input = document.getElementById('searchInput').value.trim();
+            if (!input) return;
+
+            try {
+                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(input)},South%20Africa&limit=1`);
+                const data = await response.json();
+                if (data.length > 0) {
+                    const { lat, lon } = data[0];
+                    initMap(parseFloat(lat), parseFloat(lon));
+                    document.getElementById('searchPopup').style.display = 'none';
+                } else {
+                    alert("Location not found in South Africa. Try a town, city, or area name.");
+                }
+            } catch (error) {
+                console.error('Search error:', error);
+                alert("Error searching location. Check your connection and try again.");
+            }
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            position => {
+                const { latitude, longitude } = position.coords;
+                console.log('Geolocation success:', latitude, longitude);
+                initMap(latitude, longitude);
+            },
+            error => {
+                console.error("Geolocation error:", error.message);
+                alert("Using Johannesburg as default location.");
+                initMap(-26.2041, 28.0473);
+                document.getElementById('searchPopup').style.display = 'block';
+            },
+            { timeout: 10000, enableHighAccuracy: true }
+        );
+
+        document.getElementById('logoffBtn').addEventListener('click', () => {
+            if (peer) peer.destroy();
+            nearbyPeers.forEach(p => map.removeLayer(p.marker));
+            nearbyPeers = [];
+            isOffline = true;
+            window.location.href = 'index.html';
+        });
+
+        document.getElementById('recenterBtn').addEventListener('click', () => {
+            if (currentMarker) map.setView(currentMarker.getLatLng(), 15);
+        });
+
+        document.getElementById('searchInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleSearch();
+        });
+
+        window.addEventListener('online', () => {
+            if (!isOffline && map) {
+                const center = map.getCenter();
+                initMap(center.lat, center.lng, map.getZoom());
+            }
+        });
+        window.addEventListener('offline', () => {
+            if (!isOffline && map) {
+                const center = map.getCenter();
+                showOfflineMap(center.lat, center.lng, map.getZoom());
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>SA-Taaxi App</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.6.0/remixicon.min.css" rel="stylesheet">
+<link rel="manifest" href="manifest.json">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config={theme:{extend:{colors:{primary:'#4F46E5',secondary:'#10B981'},borderRadius:{'none':'0px','sm':'4px',DEFAULT:'8px','md':'12px','lg':'16px','xl':'20px','2xl':'24px','3xl':'32px','full':'9999px','button':'8px'}}}}
+</script>
+<style>
+body { touch-action: manipulation; }
+</style>
+</head>
+<body class="bg-gray-50 w-[375px] min-h-[762px] mx-auto relative">
+<nav class="fixed top-0 w-full bg-white shadow-sm z-50 px-4 py-3 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<img src="https://static.readdy.ai/image/4af54f873fec3d1a2ef13aa3c18bbec0/8b2ad1ca07e49cd9e3d3913c13cb821f.png" alt="Logo" class="w-6 h-6 object-contain" />
+</div>
+<div class="flex items-center gap-2">
+<div class="relative">
+<button id="langBtn" class="flex items-center gap-1 text-sm text-gray-600 px-2 py-1 rounded-button border border-gray-200">
+<i class="ri-global-line"></i>
+<span id="currentLang">English</span>
+<i class="ri-arrow-down-s-line"></i>
+</button>
+<div id="langDropdown" class="hidden absolute right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg w-36 z-50">
+<button class="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 border-b border-gray-100" onclick="changeLang('English')">English</button>
+<button class="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 border-b border-gray-100" onclick="changeLang('isiXhosa')">isiXhosa</button>
+<button class="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 border-b border-gray-100" onclick="changeLang('isiZulu')">isiZulu</button>
+<button class="w-full px-4 py-2 text-left text-sm hover:bg-gray-50" onclick="changeLang('Afrikaans')">Afrikaans</button>
+</div>
+</div>
+</div>
+</nav>
+<main class="pt-16 pb-20 px-4">
+<div class="mb-10">
+<img src="https://public.readdy.ai/ai/img_res/3d38e468c1e004bfd7e4a15587b2ee19.jpg" alt="Minibus" class="w-full h-48 object-cover rounded-lg mb-4"/>
+<p class="text-center text-gray-600 text-sm">Helping you find taxis and commuters faster.</p>
+</div>
+<div class="grid grid-cols-1 gap-4 mb-10">
+<button id="findTaxiBtn" class="w-full bg-primary text-white py-4 !rounded-button flex items-center justify-center gap-2 text-lg">
+<i class="ri-taxi-line"></i>
+Find Nearby Taxis
+</button>
+<button id="findCommuters" class="w-full bg-secondary text-white py-4 !rounded-button flex items-center justify-center gap-2 text-lg">
+<i class="ri-group-line"></i>
+Find Waiting Commuters
+</button>
+</div>
+<div class="mb-10">
+<img src="https://static.readdy.ai/image/4af54f873fec3d1a2ef13aa3c18bbec0/8b2ad1ca07e49cd9e3d3913c13cb821f.png" alt="South Africa Map" class="w-full h-52 object-contain rounded-lg"/>
+</div>
+<p class="text-center text-gray-500 text-xs">This app does not save your data but will share your current location for a short period.</p>
+</main>
+<div id="locationModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden">
+<div class="bg-white rounded-lg fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 p-6 w-[320px]">
+<h3 class="text-lg font-medium mb-2">Location Access</h3>
+<p class="text-gray-600 text-sm mb-6">Allow Minibus Taxi Finder to access your location to find nearby taxis and commuters?</p>
+<div class="flex gap-3">
+<button id="denyLocation" class="flex-1 py-2 border border-gray-200 !rounded-button">Deny</button>
+<button id="allowLocation" class="flex-1 py-2 bg-primary text-white !rounded-button">Allow</button>
+</div>
+</div>
+</div>
+<script>
+const translations = {
+  English: { findTaxi: "Find Nearby Taxis", findCommuters: "Find Waiting Commuters", locationTitle: "Location Access", locationDesc: "Allow Minibus Taxi Finder to access your location to find nearby taxis and commuters?", allow: "Allow", deny: "Deny", helpText: "Helping you find taxis and commuters faster." },
+  isiXhosa: { findTaxi: "Fumana iTaxi Ekufuphi", findCommuters: "Fumana Abantu Abalindileyo", locationTitle: "Imvume Yendawo", locationDesc: "Vumela iMinibus Taxi Finder ukuba ifumane indawo yakho ukuze ufumane iitaxi nabantu abakufuphi?", allow: "Vumela", deny: "Yala", helpText: "Sikunceda ufumane iitaxi nabantu ngokukhawuleza." },
+  isiZulu: { findTaxi: "Thola amaTekisi Eduze", findCommuters: "Thola Abantu Abalindile", locationTitle: "Imvume Yendawo", locationDesc: "Vumela iMinibus Taxi Finder ukuthi ithole indawo yakho ukuze uthole amatekisi nabantu eduze?", allow: "Vumela", deny: "Yeka", helpText: "Sikusiza uthole amatekisi nabantu ngokushesha." },
+  Afrikaans: { findTaxi: "Vind Nabye Taxi's", findCommuters: "Vind Wagtende Pendelaars", locationTitle: "Ligging Toegang", locationDesc: "Laat Minibus Taxi Finder toe om jou ligging te gebruik om taxi's en pendelaars naby jou te vind?", allow: "Toelaat", deny: "Weier", helpText: "Help jou om taxi's en pendelaars vinniger te vind." }
+};
+
+let currentLanguage = 'English';
+let userType = '';
+
+function updateContent() {
+  const texts = translations[currentLanguage];
+  document.getElementById('findTaxiBtn').innerHTML = `<i class="ri-taxi-line"></i>${texts.findTaxi}`;
+  document.getElementById('findCommuters').innerHTML = `<i class="ri-group-line"></i>${texts.findCommuters}`;
+  document.querySelector('.text-center.text-gray-600').textContent = texts.helpText;
+  document.querySelector('#locationModal h3').textContent = texts.locationTitle;
+  document.querySelector('#locationModal p').textContent = texts.locationDesc;
+  document.getElementById('allowLocation').textContent = texts.allow;
+  document.getElementById('denyLocation').textContent = texts.deny;
+}
+
+document.getElementById('findTaxiBtn').addEventListener('click', () => {
+  userType = 'taxi';
+  document.getElementById('locationModal').classList.remove('hidden');
+});
+
+document.getElementById('findCommuters').addEventListener('click', () => {
+  userType = 'commuter';
+  document.getElementById('locationModal').classList.remove('hidden');
+});
+
+document.getElementById('denyLocation').addEventListener('click', () => {
+  document.getElementById('locationModal').classList.add('hidden');
+});
+
+document.getElementById('allowLocation').addEventListener('click', () => {
+  document.getElementById('locationModal').classList.add('hidden');
+  window.location.href = `map.html?type=${userType}`;
+});
+
+const langBtn = document.getElementById('langBtn');
+const langDropdown = document.getElementById('langDropdown');
+const currentLang = document.getElementById('currentLang');
+
+langBtn.addEventListener('click', () => {
+  langDropdown.classList.toggle('hidden');
+});
+
+document.addEventListener('click', (e) => {
+  if (!langBtn.contains(e.target)) {
+    langDropdown.classList.add('hidden');
+  }
+});
+
+function changeLang(lang) {
+  currentLanguage = lang;
+  currentLang.textContent = lang;
+  langDropdown.classList.add('hidden');
+  updateContent();
+}
+
+updateContent();
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js');
+}
+</script>
+</body>
+</html>
