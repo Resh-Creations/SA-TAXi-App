@@ -2,7 +2,7 @@ const CACHE_NAME = 'minibus-taxi-finder-v5';
 const urlsToCache = [
     'index.html',
     'map.html',
-    'offline map.jpg', // Ensure this matches your file name exactly
+    'offline map.jpg',
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
     'https://cdn.tailwindcss.com',
